@@ -1,0 +1,8 @@
+import {DatabaseSync} from 'node:sqlite';import fs from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
+export async function createEnvironment(secrets){
+  const sqlite=new DatabaseSync(':memory:');sqlite.exec(await fs.readFile(new URL('./schema.sql',import.meta.url),'utf8'));
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'swagx-relay-'));
+  function safe(key){if(!/^jobs\/[a-f0-9-]{36}\/(request|result|chunk-\d+)$/.test(key))throw Error('Invalid transient object path');return path.join(directory,...key.split('/'))}
+  const env={...secrets,DB:{prepare(sql){let args=[];return {bind(...values){args=values;return this},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){return sqlite.prepare(sql).run(...args)}}}},BUCKET:{async put(key,value){const file=safe(key);await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,value,{mode:0o600})},async get(key){try{const value=await fs.readFile(safe(key),'utf8');return {async text(){return value}}}catch(e){if(e.code==='ENOENT')return null;throw e}},async delete(keys){for(const key of Array.isArray(keys)?keys:[keys])await fs.rm(safe(key),{force:true})},async list({prefix}){if(!/^jobs\/[a-f0-9-]{36}\/$/.test(prefix))throw Error('Invalid prefix');const folder=path.join(directory,...prefix.split('/'));try{return {objects:(await fs.readdir(folder)).map(name=>({key:prefix+name}))}}catch(e){if(e.code==='ENOENT')return {objects:[]};throw e}}}};
+  return {env,async close(){sqlite.close();await fs.rm(directory,{recursive:true,force:true})}};
+}

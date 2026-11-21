@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: swagx-panel
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.2
+      - key: AGENT_TOKEN
+        sync: false
+      - key: BRIDGE_SECRET
+        sync: false
